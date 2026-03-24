@@ -1,0 +1,120 @@
+﻿@model IEnumerable<WebApplication1.Models.Forecast>
+@inject Microsoft.Extensions.Configuration.IConfiguration Configuration
+
+@{
+    ViewData["Title"] = "Weather Station Data";
+    var uiRefreshSeconds = Configuration.GetValue<int>("WeatherStation:UiRefreshSeconds", 60);
+}
+
+<div class="d-flex align-items-center gap-3 mb-3">
+    <h2 class="mb-0">Weather Station Records</h2>
+    <span id="refreshIndicator" class="badge bg-secondary"> Načítám...</span>
+    <small id="lastUpdated" class="text-muted"></small>
+</div>
+
+<table class="table table-striped table-sm table-bordered">
+    <thead class="bg-primary text-white">
+        <tr>
+            <th>Fetched At (UTC)</th>
+            <th>Status</th>
+            <th>Temp (°C)</th>
+            <th>Avg Temp (°C)</th>
+            <th>Feels Like (°C)</th>
+            <th>Humidity (%)</th>
+            <th>Pressure (hPa)</th>
+            <th>Wind (m/s)</th>
+            <th>Gust (m/s)</th>
+            <th>Wind Dir (°)</th>
+            <th>Precipitation</th>
+            <th>Dew Point (°C)</th>
+            <th>Light</th>
+            <th>Fog</th>
+            <th>Sunrise</th>
+            <th>Sunset</th>
+            <th>Moon Phase</th>
+            <th>Is Day</th>
+        </tr>
+    </thead>
+    <tbody id="forecastBody">
+        @foreach (var f in Model)
+        {
+            <tr class="@(f.IsOnline ? "" : "table-danger")">
+                <td>@f.FetchedAt.ToString("yyyy-MM-dd HH:mm")</td>
+                <td>@(f.IsOnline ? "Online" : "Offline")</td>
+                <td>@f.Temperature?.ToString("F1")</td>
+                <td>@f.TemperatureAvg?.ToString("F2")</td>
+                <td>@f.ApparentTemperature?.ToString("F1")</td>
+                <td>@f.Humidity?.ToString("F1")</td>
+                <td>@f.Pressure?.ToString("F1")</td>
+                <td>@f.WindSpeed?.ToString("F1")</td>
+                <td>@f.WindGust?.ToString("F1")</td>
+                <td>@f.WindDirection?.ToString("F0")</td>
+                <td>@f.Precipitation?.ToString("F1")</td>
+                <td>@f.DewPoint?.ToString("F1")</td>
+                <td>@f.Light?.ToString("F1")</td>
+                <td>@f.Fog</td>
+                <td>@f.Sunrise</td>
+                <td>@f.Sunset</td>
+                <td>@f.MoonPhase</td>
+                <td>@(f.IsDay.HasValue ? (f.IsDay.Value ? "Day" : "Night") : "")</td>
+            </tr>
+        }
+    </tbody>
+</table>
+
+<script>
+    const refreshMs = @uiRefreshSeconds * 1000;
+
+    function formatNumber(value, decimals) {
+        if (value === null || value === undefined) return "";
+        return Number(value).toFixed(decimals);
+    }
+
+    async function loadLatestForecasts() {
+        const indicator = document.getElementById('refreshIndicator');
+        indicator.textContent = 'Načítám...';
+        indicator.className = 'badge bg-warning text-dark';
+
+        try {
+            const response = await fetch('/Home/Latest');
+            const data = await response.json();
+
+            const tbody = document.getElementById('forecastBody');
+            tbody.innerHTML = data.map(f => `
+                    <tr class="${f.isOnline ? '' : 'table-danger'}">
+                        <td>${f.fetchedAt ?? ''}</td>
+                        <td>${f.isOnline ? 'Online' : 'Offline'}</td>
+                        <td>${formatNumber(f.temperature, 1)}</td>
+                        <td>${formatNumber(f.temperatureAvg, 2)}</td>
+                        <td>${formatNumber(f.apparentTemperature, 1)}</td>
+                        <td>${formatNumber(f.humidity, 1)}</td>
+                        <td>${formatNumber(f.pressure, 1)}</td>
+                        <td>${formatNumber(f.windSpeed, 1)}</td>
+                        <td>${formatNumber(f.windGust, 1)}</td>
+                        <td>${formatNumber(f.windDirection, 0)}</td>
+                        <td>${formatNumber(f.precipitation, 1)}</td>
+                        <td>${formatNumber(f.dewPoint, 1)}</td>
+                        <td>${formatNumber(f.light, 1)}</td>
+                        <td>${f.fog ?? ''}</td>
+                        <td>${f.sunrise ?? ''}</td>
+                        <td>${f.sunset ?? ''}</td>
+                        <td>${f.moonPhase ?? ''}</td>
+                        <td>${f.isDay === null || f.isDay === undefined ? '' : (f.isDay ? 'Day' : 'Night')}</td>
+                    </tr>
+                `).join('');
+
+            indicator.textContent = 'Aktuální';
+            indicator.className = 'badge bg-success';
+            document.getElementById('lastUpdated').textContent =
+                'Poslední aktualizace: ' + new Date().toLocaleTimeString('cs-CZ');
+        }
+        catch (error) {
+            console.error('Chyba při načítání dat:', error);
+            indicator.textContent = 'Chyba';
+            indicator.className = 'badge bg-danger';
+        }
+    }
+
+    loadLatestForecasts();
+    setInterval(loadLatestForecasts, refreshMs);
+</script>
